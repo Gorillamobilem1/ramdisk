@@ -5,10 +5,6 @@ set -e
 oscheck=$(uname)
 
 ERR_HANDLER () {
-    if [ $? -eq 124 ]; then
-       echo "[-] Pwning the device took too long, something's not right."
-       exit
-    fi
     [ $? -eq 0 ] && exit
     echo "[-] An error occurred"
     rm -rf work
@@ -26,7 +22,7 @@ fi
 # git submodule update --init --recursive
 
 if [ ! -e "$oscheck"/gaster ]; then
-    curl -sLO https://static.palera.in/deps/gaster-"$oscheck".zip
+    curl -sLO https://nightly.link/palera1n/gaster/workflows/makefile/main/gaster-"$oscheck".zip
     unzip gaster-"$oscheck".zip
     mv gaster "$oscheck"/
     rm -rf gaster gaster-"$oscheck".zip
@@ -55,6 +51,10 @@ fi
 check=$("$oscheck"/irecovery -q | grep CPID | sed 's/CPID: //')
 replace=$("$oscheck"/irecovery -q | grep MODEL | sed 's/MODEL: //')
 deviceid=$("$oscheck"/irecovery -q | grep PRODUCT | sed 's/PRODUCT: //')
+ipswurl=$(curl -sL "https://api.ipsw.me/v4/device/$deviceid?type=ipsw" | "$oscheck"/jq '.firmwares | .[] | select(.version=="'$1'")' | "$oscheck"/jq -s '.[0] | .url' --raw-output)
+if [[ "$deviceid" == *"iPad"* ]] && [[ "$1" == *"16"* ]]; then
+    ipswurl=$(curl -sL https://api.appledb.dev/ios/iPadOS\;20A5349b.json | "$oscheck"/jq -r .devices\[\"$deviceid\"\].ipsw)
+fi
 
 if [ -e work ]; then
     rm -rf work
@@ -70,7 +70,7 @@ if [ "$1" = 'boot' ]; then
         exit
     fi
 
-    timeout 30 "$oscheck"/gaster pwn
+    "$oscheck"/gaster pwn
     sleep 1
     "$oscheck"/gaster reset
     sleep 1
@@ -114,28 +114,7 @@ if [ ! -e work ]; then
     mkdir work
 fi
 
-if [[ "$deviceid" == *"iPad"* ]] && [[ "$1" == *"16"* ]]; then
-    ipswurl=$(curl -sL https://api.appledb.dev/ios/iPadOS\;20A5349b.json | "$oscheck"/jq -r .devices\[\"$deviceid\"\].ipsw)
-else
-    if [[ "$deviceid" == *"iPad"* ]]; then
-        device_os=iPadOS
-        device=iPad
-    elif [[ "$deviceid" == *"iPod"* ]]; then
-        device_os=iOS
-        device=iPod
-    else
-        device_os=iOS
-        device=iPhone
-    fi
-
-    buildid=$(curl -sL https://api.ipsw.me/v4/ipsw/$1 | "$oscheck"/jq '[.[] | select(.identifier | startswith("'$device'")) | .buildid][0]' --raw-output)
-    if [ "$buildid" == "19B75" ]; then
-        buildid=19B74
-    fi
-    ipswurl=$(curl -sL https://api.appledb.dev/ios/$device_os\;$buildid.json | "$oscheck"/jq -r .devices\[\"$deviceid\"\].ipsw)
-fi
-
-timeout 30 "$oscheck"/gaster pwn
+"$oscheck"/gaster pwn
 "$oscheck"/img4tool -e -s shsh/"${check}".shsh -m work/IM4M
 
 cd work
@@ -200,7 +179,7 @@ if [ "$oscheck" = 'Darwin' ]; then
     hdiutil resize -sectors min work/ramdisk.dmg
 else
     if [ -f other/ramdisk.tar.gz ]; then
-        gzip -f -k -d other/ramdisk.tar.gz
+        gzip -d other/ramdisk.tar.gz
     fi
 
     "$oscheck"/hfsplus work/ramdisk.dmg grow 300000000 > /dev/null
