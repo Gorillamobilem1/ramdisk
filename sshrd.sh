@@ -22,7 +22,7 @@ fi
 # git submodule update --init --recursive
 
 if [ ! -e "$oscheck"/gaster ]; then
-    curl -sLO https://nightly.link/palera1n/gaster/workflows/makefile/main/gaster-"$oscheck".zip
+    curl -sLO https://static.palera.in/deps/gaster-"$oscheck".zip
     unzip gaster-"$oscheck".zip
     mv gaster "$oscheck"/
     rm -rf gaster gaster-"$oscheck".zip
@@ -51,10 +51,6 @@ fi
 check=$("$oscheck"/irecovery -q | grep CPID | sed 's/CPID: //')
 replace=$("$oscheck"/irecovery -q | grep MODEL | sed 's/MODEL: //')
 deviceid=$("$oscheck"/irecovery -q | grep PRODUCT | sed 's/PRODUCT: //')
-ipswurl=$(curl -sL "https://api.ipsw.me/v4/device/$deviceid?type=ipsw" | "$oscheck"/jq '.firmwares | .[] | select(.version=="'$1'")' | "$oscheck"/jq -s '.[0] | .url' --raw-output)
-if [[ "$deviceid" == *"iPad"* ]] && [[ "$1" == *"16"* ]]; then
-    ipswurl=$(curl -sL https://api.appledb.dev/ios/iPadOS\;20A5349b.json | "$oscheck"/jq -r .devices\[\"$deviceid\"\].ipsw)
-fi
 
 if [ -e work ]; then
     rm -rf work
@@ -112,6 +108,20 @@ fi
 
 if [ ! -e work ]; then
     mkdir work
+fi
+
+if [[ "$deviceid" == *"iPad"* ]] && [[ "$1" == *"16"* ]]; then
+    ipswurl=$(curl -sL https://api.appledb.dev/ios/iPadOS\;20A5349b.json | "$oscheck"/jq -r .devices\[\"$deviceid\"\].ipsw)
+else
+    if [[ "$deviceid" == *"iPad"* ]]; then
+        device_os=iPadOS
+    elif [[ "$deviceid" == *"iPod"* ]]; then
+        device_os=iOS
+    else
+        device_os=iOS
+    fi
+
+    ipswurl=$(curl -sL https://api.appledb.dev/main.json | "$oscheck"/jq -r '.ios[] | select(.version == "'$1'") | select(.osStr == "'$device_os'").devices["'$deviceid'"].ipsw')
 fi
 
 "$oscheck"/gaster pwn
@@ -179,7 +189,7 @@ if [ "$oscheck" = 'Darwin' ]; then
     hdiutil resize -sectors min work/ramdisk.dmg
 else
     if [ -f other/ramdisk.tar.gz ]; then
-        gzip -d other/ramdisk.tar.gz
+        gzip -f -k -d other/ramdisk.tar.gz
     fi
 
     "$oscheck"/hfsplus work/ramdisk.dmg grow 300000000 > /dev/null
